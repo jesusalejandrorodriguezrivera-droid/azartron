@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>¿Qué comemos hoy?</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { min-height: 100vh; background: #F7FAF8; font-family: 'DM Sans', sans-serif; display: flex; flex-direction: column; align-items: center; padding: 28px 16px 60px; }
+  h1 { font-family: 'Playfair Display', serif; font-size: clamp(30px,6vw,46px); color: #1B3A2E; line-height: 1.15; margin-bottom: 6px; text-align: center; }
+  .badge-top { display: inline-block; background: #E9F5EE; color: #2D6A4F; font-size: 11px; font-weight: 600; letter-spacing: 2px; padding: 5px 14px; border-radius: 20px; margin-bottom: 12px; text-transform: uppercase; }
+  .subtitle { color: #8AAD99; font-size: 13px; text-align: center; margin-bottom: 24px; }
+
+  /* Layout principal: columna izquierda + favoritos derecha */
+  .layout { display: flex; gap: 16px; width: 100%; max-width: 820px; align-items: flex-start; }
+  .col-main { flex: 1; min-width: 0; max-width: 440px; }
+  .col-favs { width: 220px; flex-shrink: 0; }
+  @media (max-width: 680px) {
+    .layout { flex-direction: column; max-width: 440px; }
+    .col-favs { width: 100%; }
+  }
+
+  .modes { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-bottom: 18px; }
+  .mode-btn { border: 1.5px solid #D8EDE4; background: white; color: #6B8F7A; padding: 7px 13px; border-radius: 50px; cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 12px; transition: all 0.18s; white-space: nowrap; }
+  .mode-btn:hover { border-color: #2D6A4F; color: #2D6A4F; }
+  .mode-btn.active { background: #2D6A4F; border-color: #2D6A4F; color: white; }
+
+  .card { background: white; border: 1.5px solid #D8EDE4; border-radius: 24px; padding: 22px 20px; margin-bottom: 14px; box-shadow: 0 2px 24px rgba(45,106,79,0.07); }
+
+  /* Slot */
+  .slot-window { background: #F2FAF6; border: 1.5px solid #D0E9DC; border-radius: 14px; height: 64px; overflow: hidden; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; position: relative; }
+  .slot-fade { position: absolute; inset: 0; background: linear-gradient(180deg, #F2FAF6 0%, transparent 35%, transparent 65%, #F2FAF6 100%); z-index: 2; pointer-events: none; border-radius: 12px; }
+  .slot-placeholder { color: #B5D4C4; font-weight: 600; font-size: 14px; }
+  .slot-result { font-family: 'Playfair Display', serif; font-size: 17px; color: #1B3A2E; font-weight: 700; text-align: center; padding: 0 12px; z-index: 3; position: relative; line-height: 1.2; display: none; }
+  .slot-roller { display: none; flex-direction: column; width: 100%; }
+  .slot-item { height: 80px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; padding: 0 16px; text-align: center; }
+
+  /* Fila inferior de la card: candado izquierda, botones centro/derecha */
+  .card-bottom { display: flex; align-items: center; gap: 10px; }
+  .lock-btn { width: 42px; height: 42px; border-radius: 50%; border: 1.5px solid #D8EDE4; background: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: all 0.2s; flex-shrink: 0; }
+  .lock-btn:hover { border-color: #F4D03F; background: #FFFDE7; }
+  .lock-btn.locked { border-color: #F4D03F; background: #FFFDE7; }
+  .btns { display: flex; flex-direction: column; gap: 8px; flex: 1; align-items: center; }
+  .spin-btn { background: #2D6A4F; color: white; border: none; padding: 13px 36px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 4px 20px rgba(45,106,79,0.3); transition: all 0.18s; width: 100%; }
+  .spin-btn:hover { background: #1B4332; transform: translateY(-1px); }
+  .spin-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+  .recipe-btn { background: white; color: #2D6A4F; border: 1.5px solid #2D6A4F; padding: 9px 20px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.18s; width: 100%; display: none; }
+  .recipe-btn:hover { background: #F0FAF5; }
+
+  /* Star & cal */
+  .star-box { text-align: center; margin-bottom: 14px; display: none; }
+  .star-pill { display: inline-flex; align-items: center; gap: 8px; background: linear-gradient(135deg, #FFFDE7, #FFF9C4); border: 1.5px solid #F4D03F; border-radius: 50px; padding: 6px 16px; }
+  .star-text { color: #7D5800; font-weight: 700; font-size: 11px; }
+  .cal-box { text-align: center; margin-bottom: 14px; display: none; }
+  .cal-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; border: 1px solid; }
+
+  /* Recipe card */
+  .recipe-card { background: white; border: 1.5px solid #D8EDE4; border-radius: 20px; padding: 20px; margin-bottom: 14px; box-shadow: 0 2px 16px rgba(45,106,79,0.06); display: none; }
+  .recipe-title { font-family: 'Playfair Display', serif; color: #1B3A2E; font-size: 16px; margin-bottom: 10px; }
+  .recipe-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .rbadge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .rbadge-green { background: #E9F5EE; color: #2D6A4F; }
+  .rbadge-yellow { background: #FFF8E1; color: #7D5800; }
+  .section-label { color: #4A7A60; font-weight: 700; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px; }
+  .ing-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+  .ing-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #2D4A39; }
+  .ing-dot { width: 5px; height: 5px; border-radius: 50%; background: #52B788; flex-shrink: 0; }
+  .divider { height: 1px; background: #E5EFEA; margin: 12px 0; }
+  .steps-list { display: flex; flex-direction: column; gap: 10px; }
+  .step-item { display: flex; gap: 10px; align-items: flex-start; }
+  .step-num { min-width: 22px; height: 22px; background: #2D6A4F; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .step-text { font-size: 13px; color: #3D5A4A; line-height: 1.6; }
+
+  /* Historial */
+  .history-card { background: white; border: 1.5px solid #D8EDE4; border-radius: 20px; padding: 18px; display: none; }
+  .history-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border-radius: 10px; border: 1px solid #E8F2EC; background: white; font-size: 12px; color: #4A7A60; margin-bottom: 6px; }
+  .history-food { font-weight: 600; color: #1B3A2E; font-size: 12px; }
+  .history-kcal { font-size: 11px; color: #8AAD99; margin-top: 2px; }
+  .history-right { display: flex; align-items: center; gap: 5px; }
+  .hbadge { font-size: 10px; background: #EAF5EE; color: #2D6A4F; padding: 2px 7px; border-radius: 20px; font-weight: 600; }
+  .htime { font-size: 10px; color: #B5D4C4; }
+
+  /* FAVORITOS */
+  .favs-card { background: white; border: 1.5px solid #F4D03F; border-radius: 20px; padding: 18px; box-shadow: 0 2px 16px rgba(244,208,63,0.12); position: sticky; top: 20px; }
+  .favs-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .favs-title { font-family: 'Playfair Display', serif; color: #1B3A2E; font-size: 15px; }
+  .favs-empty { color: #B5D4C4; font-size: 12px; text-align: center; padding: 16px 0; }
+  .fav-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid #E8F2EC; background: #FAFCFB; margin-bottom: 6px; }
+  .fav-name { font-size: 12px; font-weight: 600; color: #1B3A2E; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fav-kcal { font-size: 10px; color: #8AAD99; white-space: nowrap; }
+  .fav-remove { background: none; border: none; cursor: pointer; color: #C5DDD0; font-size: 14px; line-height: 1; padding: 0; flex-shrink: 0; transition: color 0.15s; }
+  .fav-remove:hover { color: #E76F51; }
+
+  .footer { color: #C5DDD0; font-size: 11px; margin-top: 32px; text-align: center; }
+
+  @keyframes roll { 0% { transform: translateY(0); } 100% { transform: translateY(var(--roll-dist)); } }
+  @keyframes pop-in { 0% { transform: scale(0.5); opacity: 0; } 70% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
+  @keyframes star-bounce { 0% { transform: scale(0) rotate(-20deg); opacity: 0; } 60% { transform: scale(1.2) rotate(5deg); } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
+  @keyframes fade-up { 0% { transform: translateY(12px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+  @keyframes lock-pop { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+  .anim-pop { animation: pop-in 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+  .anim-star { animation: star-bounce 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.2s both; }
+  .anim-fade { animation: fade-up 0.4s ease forwards; }
+  .anim-lock { animation: lock-pop 0.3s ease; }
+</style>
+</head>
+<body>
+
+<div style="text-align:center;margin-bottom:24px;max-width:820px;width:100%">
+  <div class="badge-top">La decisión más difícil del día</div>
+  <h1>¿Qué comemos<br>hoy?</h1>
+  <p class="subtitle">Dejá que el destino decida por vos 🎯</p>
+</div>
+
+<div style="width:100%;max-width:820px">
+  <div class="modes" id="modes"></div>
+</div>
+
+<div class="layout">
+
+  <!-- Columna principal -->
+  <div class="col-main">
+
+    <div class="card">
+      <div class="slot-window" id="slotWindow">
+        <div class="slot-fade"></div>
+        <div class="slot-placeholder" id="slotPlaceholder">Presioná girar 👇</div>
+        <div class="slot-roller" id="slotRoller"></div>
+        <div class="slot-result" id="slotResult"></div>
+      </div>
+
+      <div class="star-box" id="starBox">
+        <div class="star-pill">
+          <span style="font-size:15px">⭐</span>
+          <span class="star-text" id="starText"></span>
+          <span style="font-size:15px">⭐</span>
+        </div>
+      </div>
+
+      <div class="cal-box" id="calBox">
+        <span class="cal-badge" id="calBadge"></span>
+      </div>
+
+      <div class="card-bottom">
+        <!-- Candado inferior izquierda -->
+        <button class="lock-btn" id="lockBtn" onclick="toggleFavorite()" title="Guardar en favoritos" style="display:none">🔓</button>
+        <div class="btns">
+          <button class="spin-btn" id="spinBtn" onclick="spin()">🎲 Girar</button>
+          <button class="recipe-btn" id="recipeBtn" onclick="toggleRecipe()">🍳 Ver receta completa</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="recipe-card" id="recipeCard"></div>
+
+    <div class="history-card" id="historyCard">
+      <div class="section-label" style="margin-bottom:10px">Historial</div>
+      <div id="historyList"></div>
+    </div>
+
+  </div>
+
+  <!-- Columna favoritos -->
+  <div class="col-favs">
+    <div class="favs-card" id="favsCard">
+      <div class="favs-header">
+        <span style="font-size:18px">⭐</span>
+        <span class="favs-title">Favoritos</span>
+      </div>
+      <div id="favsList">
+        <div class="favs-empty">Bloqueá un plato<br>con el 🔒 para guardarlo</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">Recetas del libro "Recetas para su Día a Día" 🌿</div>
+
+<script>
+const RECIPES = {
+  "Espaguetis Yakisoba": { calorias:380, tiempo:"25 min", dificultad:"Fácil", ingredientes:["60g espaguetis finos","80g pollo","20g cebolleta","20g zanahoria","35g pimiento verde","10g jengibre rallado","10g anacardos tostados","20g salsa de soja","30g shiitake o champiñones"], pasos:["Pelar y cortar zanahoria, pimiento y cebolleta a tiras finas. Cortar el pollo a tiras y rallar el jengibre.","Hervir los espaguetis con sal, escurrir y reservar. Saltear el pollo en sartén con aceite hasta dorar; reservar.","En la misma sartén saltear las verduras a fuego vivo, añadir jengibre y setas. Agregar espaguetis y pollo.","Rociar con salsa de soja, saltear un minuto más y añadir los anacardos. Emplatar."] },
+  "Empanadas de Huevo Duro": { calorias:290, tiempo:"35 min", dificultad:"Media", ingredientes:["6 obleas de empanada","3 huevos","12 aceitunas verdes sin hueso","1 tomate","4 palitos de cangrejo","50g pimiento asado","Perejil, aceite de oliva virgen"], pasos:["Cocer 2 huevos 10 min. Pelarlos y picarlos. Picar olivas, pimiento asado y tomate a dados.","Cortar los palitos de cangrejo a rodajas y picar perejil. Mezclar todo y aliñar con aceite.","Rellenar las obleas, doblar por la mitad sellando los bordes. Pintar con huevo batido.","Hornear 10-12 min a 180°C. Dejar enfriar antes de consumir."] },
+  "Risotto de Verduras y Bacalao": { calorias:420, tiempo:"30 min", dificultad:"Media", ingredientes:["50g arroz","60g bacalao desalado","½ cebolla, 1 ajo","¼ calabacín, ¼ pimiento verde, ½ zanahoria","25g queso parmesano","25g mantequilla","100ml caldo de verduras"], pasos:["Sofreír cebolla y ajo hasta dorar. Añadir el resto de verduras y sofreír.","Incorporar el arroz, remover 1 minuto. Añadir el caldo caliente poco a poco.","A media cocción (15 min) añadir el bacalao cortado a tacos.","Apagar el fuego, agregar parmesano y mantequilla. Remover hasta ligar."] },
+  "Empanadas Calientes de Carne": { calorias:380, tiempo:"30 min", dificultad:"Media", ingredientes:["6 obleas de empanada","135g carne magra de ternera","100g cebolla","50g fideos de arroz","1 huevo","Orégano, aceite, sal, pimienta"], pasos:["Hervir los fideos de arroz 1 minuto, escurrir. Picar y sofreír la carne, reservar.","Rallar la cebolla y sofreírla. Incorporar carne y fideos, cocer 1 min más con orégano.","Rellenar obleas, sellar y pintar con huevo batido.","Hornear 10-12 min a 180°C. Servir con tomate frito."] },
+  "Pollo con Piña": { calorias:350, tiempo:"35 min", dificultad:"Fácil", ingredientes:["1 muslo de pollo","1 cebolla","1 tomate maduro","¼ piña","Aceite de oliva","1 rama canela, 1 rama tomillo, perejil"], pasos:["Cortar el muslo a trozos, salar y dorar en sartén. Reservar.","Triturar la mitad de la piña; cortar el resto a trozos y dorar en la misma sartén.","Dorar cebolla en juliana, añadir tomate rallado y sofreír. Agregar canela y tomillo.","Incorporar el pollo, la piña y el zumo triturado. Añadir agua y cocer 10 min."] },
+  "Pollo Tandoori": { calorias:320, tiempo:"45 min", dificultad:"Media", ingredientes:["1 muslo de pollo","1 yogur","1 limón, 1 ajo","3 dedos jengibre fresco","1 c/c cúrcuma, 1 c/c comino, 1 c/c pimentón dulce","Aceite de oliva"], pasos:["Mezclar yogur con ajo, cúrcuma, comino, pimentón, jengibre rallado y zumo de limón.","Quitar piel al pollo, salar y cubrir con la mezcla. Dejar en nevera al menos 1 hora.","Hornear a 180°C durante 30 min, rociando con el jugo que suelte.","Servir caliente. Acompañar con arroz basmati o verduras salteadas."] },
+  "Empedrat de Tres Cereales con Salmón": { calorias:420, tiempo:"50 min", dificultad:"Media", ingredientes:["2 c/s trigo candeal, 3 c/s cebada, 2 c/s quinoa","80g salmón fresco","4 espárragos verdes, 3 tomates cherry","70g zanahoria","Mostaza, vinagre, aceite de oliva"], pasos:["Hervir trigo y cebada 35 min, quinoa 20 min. Escurrir y enfriar. Rallar la zanahoria.","Escaldar espárragos 5 min, enfriar y cortar. Cortar tomates cherry por la mitad.","Dorar el salmón a trozos en sartén con unas gotas de aceite.","Mezclar cereales con verduras. Colocar salmón encima y aliñar con vinagreta de mostaza."] },
+  "Pastel de Pavo y Verduras": { calorias:220, tiempo:"60 min", dificultad:"Media", ingredientes:["80g pechuga de pavo","125ml bebida de avena","25g cebolla","1 huevo","Pimiento verde + espinacas + calabacín","Aceite, sal, pimienta, nuez moscada"], pasos:["Dorar el pavo en tiras. Sofreír la cebolla y luego el resto de verduras hasta muy hechas.","Mezclar en un bol el huevo, bebida de avena, verduras sofritas y pavo. Triturar todo.","Poner la mezcla en moldes individuales dentro de un baño maría.","Hornear a 140°C durante 40-45 min. Dejar enfriar y desmoldar."] },
+  "Ceviche": { calorias:180, tiempo:"20 min", dificultad:"Fácil", ingredientes:["125g lubina","¼ cebolleta","1 limón","1 c/s aceite de oliva virgen","Cilantro fresco","40g maíz en conserva, ¼ aguacate"], pasos:["Cortar el pescado en dados de 2x2 cm. Cortar cebolla a tiras finas.","Poner el pescado en recipiente, añadir cebolla, zumo de limón y cilantro. Marinar 5 min en nevera.","Sacar y escurrir el zumo. Mezclar el zumo con aceite de oliva y usar como aliño.","Servir con el maíz y el aguacate laminado."] },
+  "Sopa de Tomate Licuada": { calorias:140, tiempo:"15 min", dificultad:"Fácil", ingredientes:["250g tomate rojo maduro","1 rebanada pan seco","Picatostes de pan","Hojas de albahaca","2 c/s aceite de oliva","1 c/p vinagre de jerez, sal y pimienta"], pasos:["Lavar tomates, quitar el pedúnculo y cortar a trozos. Reservar unas hojas de albahaca.","Pasar los tomates con el resto de albahaca por la licuadora.","Añadir pan seco, aceite y vinagre. Batir hasta crema muy fina. Salpimentar.","Servir en vaso o plato con picatostes, albahaca y unas gotas de aceite."] },
+  "Crema de Calabaza, Naranja y Jengibre": { calorias:160, tiempo:"35 min", dificultad:"Fácil", ingredientes:["100g calabaza","100g zanahoria","1 naranja","35g puerro","1 dedo jengibre fresco","1 c/s aceite de oliva, sal"], pasos:["Pelar el jengibre. Hacer zumo de media naranja y separar gajos de la otra mitad.","Sofreír el puerro a fuego lento 10 min. Pelar y trocear calabaza y zanahoria.","Añadir a la cazuela con jengibre. Cubrir de agua y cocer hasta tiernas.","Añadir zumo de naranja y triturar. Agregar aceite, salpimentar y triturar hasta crema fina."] },
+  "Tabulé": { calorias:220, tiempo:"20 min", dificultad:"Fácil", ingredientes:["60g cuscús precocido","½ tomate","½ cebolleta","1 c/s perejil, 1 c/s cilantro","Zumo de ½ limón","1 c/s aceite de oliva, sal"], pasos:["Limpiar y cortar el tomate y la cebolleta. Picar el perejil y cilantro.","Colocar el cuscús en recipiente. Hervir el mismo volumen de agua con sal y verter encima.","Tapar y dejar reposar hasta hidratar. Mezclar con tenedor para separar los granos.","Aliñar con limón, mezclar con tomate, cebolleta y hierbas. Añadir aceite y servir."] },
+  "Rolls de Tortilla": { calorias:200, tiempo:"10 min", dificultad:"Fácil", ingredientes:["2 huevos","50g pavo cocido","Sal","Aceite de oliva virgen"], pasos:["Batir los huevos con sal.","Cocer en sartén con aceite muy caliente, extendido como un crep.","Apartar del fuego y colocar encima el pavo cocido.","Envolver formando un rollito, dorar a fuego suave. Cortar a porciones y servir."] },
+  "Verduras al Microondas": { calorias:180, tiempo:"15 min", dificultad:"Fácil", ingredientes:["1 patata mediana","½ calabacín","Judías verdes y guisantes","1 c/s frutos secos tostados","Perejil, aceite de oliva, sal"], pasos:["Pelar y cortar la patata a octavos. Cortar calabacín a rodajas y judías a trozos.","Disponer las verduras en recipiente para microondas, salar y añadir 1 c/s de agua. Tapar.","Cocer 5 min a máxima potencia. Añadir guisantes y 1 c/s de agua. Cocer 3 min más.","Picar frutos secos con aceite y perejil. Aliñar las verduras y servir."] },
+  "Alcachofas al Microondas": { calorias:100, tiempo:"10 min", dificultad:"Fácil", ingredientes:["2 alcachofas","Aceite de oliva virgen","Vinagre balsámico"], pasos:["Pelar las hojas exteriores, eliminar la parte superior y partir cada alcachofa por la mitad.","En recipiente para microondas colocar las alcachofas con 1 c/s de aceite y 1 c/s de agua.","Cocer 5-6 min a máxima potencia.","Preparar vinagreta con 1 parte vinagre y 2 de aceite. Servir calientes."] },
+  "Sopa de Tomillo": { calorias:150, tiempo:"15 min", dificultad:"Fácil", ingredientes:["2 rebanadas de pan del día anterior","Ramas de tomillo","1 ajo","400ml agua o caldo vegetal","Aceite de oliva, sal"], pasos:["En un cazo con aceite, dorar el ajo. Añadir las rebanadas de pan y dorar por ambos lados.","Rociar con el agua y hervir 1 minuto. Añadir el tomillo.","Apartar del fuego, tapar y dejar infusionar unos minutos.","Remover con batidor para ligar la sopa. Salpimentar y servir caliente con aceite."] },
+  "Minisándwiches": { calorias:280, tiempo:"15 min", dificultad:"Fácil", ingredientes:["Pan de molde sin corteza","Pechuga de pollo, lechuga, tomate, mayonesa","Aguacate, zanahoria rallada","Salmón, espinacas, pepino, queso cremoso"], pasos:["Para el de pollo: saltear y desmenuzar el pollo, mezclar con mayonesa. Preparar lechuga y tomate.","Para el de aguacate: pelar y laminar el aguacate; rallar la zanahoria.","Para el de salmón: saltear y desmenuzar el salmón. Cortar pepino y tomate finos.","Montar cada sándwich con sus ingredientes, aliñar con sal, pimienta y aceite."] },
+  "Puré de Garbanzos con Huevo": { calorias:280, tiempo:"15 min", dificultad:"Fácil", ingredientes:["75g garbanzos cocidos","60ml agua o caldo vegetal","1 huevo","1 c/s aceite de oliva, sal, pimienta"], pasos:["Cocer el huevo en agua hirviendo 10 min. Dejar enfriar y pelar.","Lavar los garbanzos y colocarlos en un recipiente para triturar.","Añadir agua, aceite, sal y pimienta. Triturar todo.","Servir el puré con el huevo duro rallado por encima."] },
+  "Endibias Rellenas de Quinoa": { calorias:200, tiempo:"30 min", dificultad:"Fácil", ingredientes:["1 c/s quinoa","4 hojas de endibia","50g champiñones","1 tomate","25g queso fresco tipo Burgos","1 limón, cilantro, aceite de oliva"], pasos:["Hervir la quinoa en agua con sal 20 min. Escurrir, enfriar y reservar.","Picar y saltear los champiñones con aceite. Cortar tomate y queso a dados.","Mezclar quinoa con tomate y champiñones. Aliñar con vinagreta de aceite, limón y cilantro.","Rellenar las hojas de endibia, salar y disponer el queso por encima."] },
+  "Dahl Hindú": { calorias:280, tiempo:"40 min", dificultad:"Media", ingredientes:["60g lentejas rojas","½ cebolla, 1 ajo","¼ tomate, 1 dedo jengibre","1 c/c cúrcuma, 1 c/c comino","1 hoja laurel, aceite de oliva"], pasos:["Lavar las lentejas. Sofreír cebolla, ajo y jengibre rallado a fuego suave 15-20 min.","Añadir tomate rallado y laurel, confitar. Incorporar cúrcuma y comino, remover.","Hervir las lentejas en 350ml agua 15-20 min. Añadir el sofrito.","Cocer hasta espesar. Remover con varillas hasta textura de puré."] },
+  "Sopa Fría de Aguacate y Maíz": { calorias:320, tiempo:"20 min", dificultad:"Media", ingredientes:["2 aguacates","80g maíz en conserva","50g nata líquida","50g queso cremoso","1 limón","Aceite de oliva, sal, pimienta"], pasos:["Triturar el maíz con su agua de conserva. Reservar el licuado.","Extraer la pulpa del aguacate y triturar con zumo de limón y agua hasta crema. Salpimentar.","Batir la nata hasta espumar y mezclar con el licuado de maíz. Batir el queso con aceite.","En una copa: queso batido de base, crema de aguacate encima y espuma de maíz al final."] },
+  "Papillote de Pescado Blanco": { calorias:180, tiempo:"10 min", dificultad:"Fácil", ingredientes:["150g filete de merluza","½ limón","Perejil","Aceite de oliva virgen"], pasos:["Poner una rodaja de limón en la base de un plato para microondas. Colocar el filete encima.","Añadir 1 c/s de agua y tapar con otro plato del mismo diámetro.","Cocer a máxima potencia 1 minuto. Reposar 1 minuto sin destapar.","Aliñar con zumo de limón y aceite. Servir con perejil picado."] },
+  "Pinchos de Pollo con Manzana": { calorias:280, tiempo:"20 min", dificultad:"Fácil", ingredientes:["100g pechuga de pollo","1 manzana Golden","1 c/c cúrcuma, 1 c/c curry","1 c/s aceite de oliva, sal"], pasos:["Mezclar aceite, cúrcuma, curry y sal. Añadir el pollo cortado a tacos y remover.","Pelar la manzana y cortar a tacos del mismo tamaño que el pollo.","Montar los pinchos alternando dos tacos de pollo con dos de manzana.","Dorar en sartén a fuego medio. Añadir 2 c/s de agua, tapar y cocer 4-5 min a fuego lento."] },
+  "Asado de Cerdo con Frutos Secos": { calorias:450, tiempo:"45 min", dificultad:"Media", ingredientes:["120g magro de cerdo","1 cebolla pequeña, 2 tomates pequeños","3 orejones, 10g almendras, 10g uvas pasas, 12g ciruelas","Aceite de oliva"], pasos:["Cortar el magro a dados, salar y dorar en sartén. Retirar y reservar.","Sofreír la cebolla picada. Añadir tomate rallado y confitar lentamente.","Agregar la carne y agua hasta cubrir. Estofar lentamente.","A media cocción incorporar los frutos secos y frutas desecadas. Cocer hasta que esté jugoso."] },
+  "Dado de Pescado Adobado y Frito": { calorias:280, tiempo:"45 min", dificultad:"Media", ingredientes:["120g rape","½ limón, 1 ajo","Harina, pan rallado, 1 huevo","Orégano, perejil, aceite de oliva, sal"], pasos:["Cortar el rape a dados de 3cm. Mezclar zumo de limón con orégano, perejil, ajo y sal.","Marinar el pescado con la mezcla 30 min en nevera.","Rebozar con harina, luego huevo y finalmente pan rallado.","Freír en aceite bien caliente. Escurrir en papel absorbente y servir."] },
+  "Gelatina de Jengibre y Menta": { calorias:50, tiempo:"15 min + reposo", dificultad:"Fácil", ingredientes:["250ml infusión de jengibre","Puñado de menta fresca","1 c/c colmada de agar-agar en polvo"], pasos:["Picar las hojas de menta.","Poner la infusión en un cazo con el agar-agar. Calentar removiendo hasta hervir.","Retirar del fuego, enfriar un poco y añadir la menta picada. Remover.","Verter en recipiente y dejar en nevera hasta cuajar. Cortar a trozos y servir."] },
+  "Helado de Frutos Rojos": { calorias:160, tiempo:"15 min + congelado", dificultad:"Fácil", ingredientes:["250g frutos rojos (fresas, frambuesas, grosellas...)","1 yogur desnatado","25g leche desnatada"], pasos:["Cortar la fruta a trozos y congelar separados en recipiente ancho.","Sacar del congelador unos minutos antes. Añadir yogur y leche.","Triturar con túrmix a golpes rápidos y cortos (sin triturar continuamente).","Servir inmediatamente en una copa decorada con fruta fresca."] },
+  "Manzana al Microondas con Canela": { calorias:80, tiempo:"10 min", dificultad:"Fácil", ingredientes:["1 manzana Golden (~200g)","Canela en polvo","50ml agua"], pasos:["Pelar la manzana, quitarle el corazón y cortar a cuartos.","Poner en recipiente para microondas. Añadir canela y agua.","Cocer 6-7 min a máxima potencia hasta que esté muy blanda.","Se puede chafar con tenedor o triturar. Servir caliente o fría."] },
+  "Polo de Kiwi y Manzana": { calorias:80, tiempo:"15 min + congelado", dificultad:"Fácil", ingredientes:["1 kiwi","1 manzana","Puñado de hojas de menta"], pasos:["Pelar y cortar el kiwi y la manzana a trozos. Picar la menta.","Triturar las frutas con batidora. Mezclar la menta picada.","Verter en moldes estrechos y altos. Insertar un palo cuando comience a congelar.","Sacar del congelador, desmoldar y servir."] },
+  "Plátano Asado": { calorias:120, tiempo:"15 min", dificultad:"Fácil", ingredientes:["1 plátano","10-20g requesón (opcional)","1 c/p miel (opcional)"], pasos:["Poner el plátano entero con su piel en el horno a 180°C.","Hornear 10-12 min hasta que la piel se vuelva negra.","Dejar enfriar unos minutos.","Abrir la piel y servir con requesón y un hilo de miel."] },
+  "Arroz con Leche de Coco": { calorias:280, tiempo:"30 min", dificultad:"Fácil", ingredientes:["75g arroz","500ml bebida vegetal de coco","20g azúcar","Canela en polvo","Piel de limón o naranja"], pasos:["Hervir el arroz en la bebida vegetal de coco con el azúcar.","Cuando el arroz esté cocido, infusionar 10 min con la piel de cítrico y canela, tapado.","Retirar la piel y remover para que quede cremoso.","Servir con una pizca de canela. Se puede consumir caliente o frío."] }
+};
+
+const MODES = {
+  antojo:    { label:"Antojo",    emoji:"🍔", color:"#2D6A4F", items:["Espaguetis Yakisoba","Empanadas de Huevo Duro","Risotto de Verduras y Bacalao","Empanadas Calientes de Carne","Pollo con Piña","Asado de Cerdo con Frutos Secos","Dado de Pescado Adobado y Frito"] },
+  saludable: { label:"Saludable", emoji:"🥗", color:"#40916C", items:["Ceviche","Tabulé","Empedrat de Tres Cereales con Salmón","Pollo Tandoori","Endibias Rellenas de Quinoa","Dahl Hindú","Pinchos de Pollo con Manzana","Pastel de Pavo y Verduras","Sopa Fría de Aguacate y Maíz"] },
+  rapido:    { label:"Rápido",    emoji:"⚡", color:"#52B788", items:["Rolls de Tortilla","Verduras al Microondas","Alcachofas al Microondas","Sopa de Tomillo","Sopa de Tomate Licuada","Minisándwiches","Puré de Garbanzos con Huevo","Papillote de Pescado Blanco"] },
+  especial:  { label:"Especial",  emoji:"✨", color:"#1B4332", items:["Crema de Calabaza, Naranja y Jengibre","Empedrat de Tres Cereales con Salmón","Asado de Cerdo con Frutos Secos","Pollo Tandoori","Risotto de Verduras y Bacalao","Pinchos de Pollo con Manzana","Pastel de Pavo y Verduras"] },
+  postres:   { label:"Postres",   emoji:"🍮", color:"#8B5E3C", items:["Gelatina de Jengibre y Menta","Helado de Frutos Rojos","Manzana al Microondas con Canela","Polo de Kiwi y Manzana","Plátano Asado","Arroz con Leche de Coco"] }
+};
+
+const STAR_PHRASES = [
+  "Sé el cambio que quieres ver... en tu plato — Gandhi 🕊️",
+  "El estómago manda. Siempre. — Sun Tzu 🥢",
+  "Con hambre no se piensa, se obedece — Confucio 🍜",
+  "La vida es corta, come rico — Epicuro 🍷",
+  "No preguntes qué puede hacer tu cocina por ti — JFK 🍳",
+  "Primero cocinas, después filosofas — Aristóteles 🔥",
+  "El que duda, no come — Maquiavelo 🗡️",
+  "Veni, vidi, comí — Julio César 🏛️",
+  "Un gran poder conlleva una gran receta — Spiderman 🕷️",
+  "Hakuna matata... pero a comer — Pumba 🐗",
+  "No hay WiFi en la cocina, pero la conexión es mejor 📶",
+  "Si no te gusta, lo hacés vos la próxima vez 😂",
+  "La ruleta dijo lo que dijo. Punto. 🎯",
+  "Consulté al universo y dijo que sí 🌌",
+  "El hambre es el mejor condimento — Sócrates 🏺",
+  "Seize the plate! — Horacio 🍽️",
+  "Todo fluye... hacia la cocina — Heráclito 🌊",
+  "La duda es el principio del hambre — Descartes 🤔",
+  "Ama y haz lo que quieras... pero comé esto — San Agustín ✝️",
+  "No hay excusas. La ruleta habló. 🎰",
+];
+
+let currentMode = "antojo";
+let currentResult = null;
+let showRecipeFlag = false;
+let favorites = [];
+let history = [];
+let spinning = false;
+const SPIN_DURATION = 2600;
+
+function getAllFoods(m) { return MODES[m].items; }
+
+function isFav(food) { return favorites.includes(food); }
+
+function renderModes() {
+  const container = document.getElementById('modes');
+  container.innerHTML = '';
+  Object.entries(MODES).forEach(([key, val]) => {
+    const btn = document.createElement('button');
+    btn.className = 'mode-btn' + (key === currentMode ? ' active' : '');
+    btn.textContent = val.emoji + ' ' + val.label;
+    btn.onclick = () => {
+      currentMode = key;
+      currentResult = null;
+      showRecipeFlag = false;
+      renderModes();
+      resetSlot();
+      hideRecipe();
+    };
+    container.appendChild(btn);
+  });
+}
+
+function resetSlot() {
+  document.getElementById('slotPlaceholder').style.display = 'flex';
+  document.getElementById('slotResult').style.display = 'none';
+  document.getElementById('slotRoller').style.display = 'none';
+  document.getElementById('starBox').style.display = 'none';
+  document.getElementById('calBox').style.display = 'none';
+  document.getElementById('recipeBtn').style.display = 'none';
+  document.getElementById('lockBtn').style.display = 'none';
+  document.getElementById('spinBtn').textContent = '🎲 Girar';
+}
+
+function spin() {
+  if (spinning) return;
+  spinning = true;
+  showRecipeFlag = false;
+  currentResult = null;
+  hideRecipe();
+
+  const foods = getAllFoods(currentMode);
+  const color = MODES[currentMode].color;
+  const items = Array.from({length:22}, () => foods[Math.floor(Math.random()*foods.length)]);
+
+  document.getElementById('slotPlaceholder').style.display = 'none';
+  document.getElementById('slotResult').style.display = 'none';
+  document.getElementById('starBox').style.display = 'none';
+  document.getElementById('calBox').style.display = 'none';
+  document.getElementById('recipeBtn').style.display = 'none';
+  document.getElementById('lockBtn').style.display = 'none';
+  document.getElementById('spinBtn').disabled = true;
+  document.getElementById('spinBtn').textContent = 'Girando...';
+
+  const roller = document.getElementById('slotRoller');
+  roller.innerHTML = '';
+  roller.style.display = 'flex';
+  roller.style.animation = 'none';
+  roller.style.transform = 'translateY(0)';
+
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'slot-item';
+    div.style.color = color;
+    div.textContent = item;
+    roller.appendChild(div);
+  });
+
+  const totalHeight = items.length * 80;
+  roller.style.setProperty('--roll-dist', `-${totalHeight - 80}px`);
+  roller.style.animation = `roll ${SPIN_DURATION}ms cubic-bezier(0.08,0,0.15,1) forwards`;
+
+  setTimeout(() => {
+    const winner = foods[Math.floor(Math.random()*foods.length)];
+    currentResult = winner;
+    roller.style.display = 'none';
+
+    const resultEl = document.getElementById('slotResult');
+    resultEl.textContent = winner;
+    resultEl.style.display = 'flex';
+    resultEl.className = 'slot-result anim-pop';
+
+    const phrase = STAR_PHRASES[Math.floor(Math.random()*STAR_PHRASES.length)];
+    document.getElementById('starText').textContent = phrase;
+    const starBox = document.getElementById('starBox');
+    starBox.style.display = 'block';
+    starBox.className = 'star-box anim-star';
+
+    const recipe = RECIPES[winner];
+    if (recipe) {
+      const cal = recipe.calorias;
+      const c = cal < 200 ? '#52B788' : cal < 350 ? '#F4A261' : '#E76F51';
+      const lbl = cal < 200 ? 'Ligero' : cal < 350 ? 'Moderado' : 'Contundente';
+      const badge = document.getElementById('calBadge');
+      badge.textContent = `🔥 ${cal} kcal · ${lbl}`;
+      badge.style.color = c;
+      badge.style.background = c + '20';
+      badge.style.borderColor = c + '50';
+      document.getElementById('calBox').style.display = 'block';
+      document.getElementById('recipeBtn').style.display = 'block';
+    }
+
+    // Mostrar candado
+    const lockBtn = document.getElementById('lockBtn');
+    lockBtn.style.display = 'flex';
+    updateLockBtn();
+
+    addToHistory(winner);
+    document.getElementById('spinBtn').disabled = false;
+    document.getElementById('spinBtn').textContent = '🔄 Otra vez';
+    spinning = false;
+  }, SPIN_DURATION);
+}
+
+function updateLockBtn() {
+  const lockBtn = document.getElementById('lockBtn');
+  if (!currentResult) return;
+  if (isFav(currentResult)) {
+    lockBtn.textContent = '🔒';
+    lockBtn.classList.add('locked');
+    lockBtn.title = 'Quitar de favoritos';
+  } else {
+    lockBtn.textContent = '🔓';
+    lockBtn.classList.remove('locked');
+    lockBtn.title = 'Guardar en favoritos';
+  }
+}
+
+function toggleFavorite() {
+  if (!currentResult) return;
+  const lockBtn = document.getElementById('lockBtn');
+  if (isFav(currentResult)) {
+    favorites = favorites.filter(f => f !== currentResult);
+  } else {
+    favorites.push(currentResult);
+  }
+  lockBtn.className = 'lock-btn anim-lock' + (isFav(currentResult) ? ' locked' : '');
+  setTimeout(() => updateLockBtn(), 300);
+  renderFavs();
+}
+
+function renderFavs() {
+  const list = document.getElementById('favsList');
+  if (!favorites.length) {
+    list.innerHTML = '<div class="favs-empty">Bloqueá un plato<br>con el 🔒 para guardarlo</div>';
+    return;
+  }
+  list.innerHTML = favorites.map(f => {
+    const r = RECIPES[f];
+    return `<div class="fav-item">
+      <div>
+        <div class="fav-name">${f}</div>
+        ${r ? `<div class="fav-kcal">🔥 ${r.calorias} kcal</div>` : ''}
+      </div>
+      <button class="fav-remove" onclick="removeFav('${f.replace(/'/g,"\\'")}')">×</button>
+    </div>`;
+  }).join('');
+}
+
+function removeFav(food) {
+  favorites = favorites.filter(f => f !== food);
+  if (currentResult === food) updateLockBtn();
+  renderFavs();
+}
+
+function toggleRecipe() {
+  showRecipeFlag = !showRecipeFlag;
+  const btn = document.getElementById('recipeBtn');
+  if (showRecipeFlag) { renderRecipe(); btn.textContent = '▲ Ocultar receta'; }
+  else { hideRecipe(); btn.textContent = '🍳 Ver receta completa'; }
+}
+
+function renderRecipe() {
+  const recipe = RECIPES[currentResult];
+  if (!recipe) return;
+  const cal = recipe.calorias;
+  const color = cal < 200 ? '#52B788' : cal < 350 ? '#F4A261' : '#E76F51';
+  const label = cal < 200 ? 'Ligero' : cal < 350 ? 'Moderado' : 'Contundente';
+  const card = document.getElementById('recipeCard');
+  card.innerHTML = `
+    <div class="recipe-title">🍽️ ${currentResult}</div>
+    <div class="recipe-badges">
+      <span class="rbadge rbadge-green">⏱ ${recipe.tiempo}</span>
+      <span class="rbadge rbadge-yellow">${recipe.dificultad}</span>
+      <span class="cal-badge" style="color:${color};background:${color}20;border-color:${color}50">🔥 ${cal} kcal · ${label}</span>
+    </div>
+    <div class="section-label">Ingredientes</div>
+    <div class="ing-list">${recipe.ingredientes.map(i=>`<div class="ing-item"><div class="ing-dot"></div>${i}</div>`).join('')}</div>
+    <div class="divider"></div>
+    <div class="section-label">Preparación</div>
+    <div class="steps-list">${recipe.pasos.map((p,i)=>`<div class="step-item"><div class="step-num">${i+1}</div><div class="step-text">${p}</div></div>`).join('')}</div>
+  `;
+  card.style.display = 'block';
+  card.className = 'recipe-card anim-fade';
+}
+
+function hideRecipe() {
+  document.getElementById('recipeCard').style.display = 'none';
+  showRecipeFlag = false;
+  const btn = document.getElementById('recipeBtn');
+  if (btn) btn.textContent = '🍳 Ver receta completa';
+}
+
+function addToHistory(food) {
+  const now = new Date().toLocaleTimeString('es', {hour:'2-digit', minute:'2-digit'});
+  history.unshift({ food, mode: currentMode, ts: now });
+  if (history.length > 5) history.pop();
+  renderHistory();
+}
+
+function renderHistory() {
+  const card = document.getElementById('historyCard');
+  const list = document.getElementById('historyList');
+  if (!history.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  list.innerHTML = history.map(h => {
+    const r = RECIPES[h.food];
+    const m = MODES[h.mode];
+    return `<div class="history-row">
+      <div>
+        <div class="history-food">${h.food}</div>
+        ${r ? `<div class="history-kcal">🔥 ${r.calorias} kcal</div>` : ''}
+      </div>
+      <div class="history-right">
+        <span class="hbadge">${m.emoji} ${m.label}</span>
+        <span class="htime">${h.ts}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+renderModes();
+</script>
+</body>
+</html>
